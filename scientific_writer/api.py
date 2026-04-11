@@ -33,7 +33,7 @@ from .utils import (
 EFFORT_LEVEL_MODELS = {
     "low": "claude-haiku-4-5",
     "medium": "claude-sonnet-4-6",
-    "high": "claude-sonnet-4-6",
+    "high": "claude-opus-4-6",
 }
 
 
@@ -71,11 +71,11 @@ async def generate_paper(
     output_dir: Optional[str] = None,
     api_key: Optional[str] = None,
     model: Optional[str] = None,
-    effort_level: Literal["low", "medium", "high"] = "medium",
+    effort_level: Literal["low", "medium", "high"] = "low",
     data_files: Optional[List[str]] = None,
     cwd: Optional[str] = None,
-    track_token_usage: bool = False,
-    auto_continue: bool = True,
+    track_token_usage: bool = True,
+    auto_continue: bool = False,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Generate a scientific document asynchronously with progress updates.
@@ -228,6 +228,18 @@ IMPORTANT - CONVERSATION CONTINUITY:
     total_output_tokens = 0
     total_cache_creation_tokens = 0
     total_cache_read_tokens = 0
+
+    def _normalize_usage_value(usage, key):
+        if isinstance(usage, dict):
+            value = usage.get(key, 0)
+        else:
+            value = getattr(usage, key, 0)
+        if value is None:
+            return 0
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
     
     yield ProgressUpdate(
         message="Starting document generation",
@@ -242,10 +254,10 @@ IMPORTANT - CONVERSATION CONTINUITY:
             # Track token usage if enabled
             if track_token_usage and hasattr(message, "usage") and message.usage:
                 usage = message.usage
-                total_input_tokens += getattr(usage, "input_tokens", 0)
-                total_output_tokens += getattr(usage, "output_tokens", 0)
-                total_cache_creation_tokens += getattr(usage, "cache_creation_input_tokens", 0)
-                total_cache_read_tokens += getattr(usage, "cache_read_input_tokens", 0)
+                total_input_tokens += _normalize_usage_value(usage, "input_tokens")
+                total_output_tokens += _normalize_usage_value(usage, "output_tokens")
+                total_cache_creation_tokens += _normalize_usage_value(usage, "cache_creation_input_tokens")
+                total_cache_read_tokens += _normalize_usage_value(usage, "cache_read_input_tokens")
             
             if hasattr(message, "content") and message.content:
                 for block in message.content:
