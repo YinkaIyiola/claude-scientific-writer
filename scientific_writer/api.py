@@ -110,10 +110,15 @@ async def generate_paper(
     # Removed the "NEVER write to /tmp/" restriction so Celery workers can
     # use OUTPUT_BASE_DIR freely regardless of where it lives on disk.
     system_instructions += "\n\n" + f"""
-IMPORTANT - WORKING DIRECTORY:
-- Your working directory is: {work_dir}
-- ALWAYS create writing_outputs folder in this directory: {work_dir}/writing_outputs/
-- All paper outputs MUST go to: {work_dir}/writing_outputs/<timestamp>_<description>/
+CRITICAL - OUTPUT DIRECTORY (MUST FOLLOW EXACTLY):
+- Your ONLY working directory is: {work_dir}
+- The writing_outputs folder is: {work_dir}/writing_outputs/
+- ALL files MUST be created inside: {work_dir}/writing_outputs/<timestamp>_<description>/
+- DO NOT create files anywhere else — not in the current directory, not in ~/,
+  not in any other path. ONLY inside {work_dir}/writing_outputs/
+- If you are unsure of the path, run: echo $PWD to confirm you are in {work_dir}
+- The first bash command you run MUST be:
+  mkdir -p "{work_dir}/writing_outputs"
 
 IMPORTANT - CONVERSATION CONTINUITY:
 - This is a NEW paper request - create a new paper directory
@@ -544,12 +549,19 @@ def _build_paper_result(paper_dir: Path, file_info: Dict[str, Any]) -> PaperResu
     
     status = "success"
     compilation_success = file_info['pdf_final'] is not None
-    
+
     if not compilation_success:
-        if file_info['tex_final']:
-            status = "partial"
-        else:
-            status = "failed"
+        # Any output file (tex, md, bib, figures, data) counts as partial not failed
+        has_any_output = any([
+            file_info.get('tex_final'),
+            file_info.get('tex_drafts'),
+            file_info.get('bibliography'),
+            file_info.get('figures'),
+            file_info.get('data'),
+            file_info.get('progress_log'),
+            file_info.get('summary'),
+        ])
+        status = "partial" if has_any_output else "failed"
     
     result = PaperResult(
         status=status,
