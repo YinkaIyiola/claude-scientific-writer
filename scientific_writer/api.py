@@ -94,6 +94,31 @@ async def generate_paper(
     
     # Set up Claude skills in the working directory (includes WRITER.md)
     setup_claude_skills(package_dir, work_dir)
+
+    # Append absolute output path to WRITER.md so the agent never uses
+    # a relative writing_outputs/ that resolves to the wrong directory
+    if output_dir:
+        writer_md = work_dir / ".claude" / "WRITER.md"
+        if writer_md.exists():
+            try:
+                abs_output = str(Path(output_dir).resolve())
+                patch = (
+                    f"\n\n## ABSOLUTE OUTPUT PATH (OVERRIDE ALL OTHER INSTRUCTIONS)\n"
+                    f"- You MUST create all project folders inside: `{abs_output}/`\n"
+                    f"- Full path pattern: `{abs_output}/<timestamp>_<description>/`\n"
+                    f"- NEVER use a relative `writing_outputs/` path\n"
+                    f"- NEVER write files outside `{abs_output}/`\n"
+                    f"- Your first bash command MUST be:\n"
+                    f"  ```bash\n"
+                    f"  mkdir -p \"{abs_output}\"\n"
+                    f"  ```\n"
+                )
+                writer_md.write_text(
+                    writer_md.read_text(encoding="utf-8") + patch,
+                    encoding="utf-8"
+                )
+            except Exception:
+                pass
     
     # Ensure output folder exists
     output_folder = ensure_output_folder(work_dir, output_dir)
