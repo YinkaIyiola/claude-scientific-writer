@@ -226,6 +226,11 @@ IMPORTANT - CONVERSATION CONTINUITY:
                             file_path = tool_input.get("file_path", tool_input.get("path", ""))
                             if file_path:
                                 files_written.append(file_path)
+                        elif tool_name.lower() == "bash":
+                            # Also track any mkdir writing_outputs commands
+                            cmd = tool_input.get("command", "")
+                            if "writing_outputs" in cmd and "mkdir" in cmd:
+                                files_written.append(cmd)
                         
                         tool_progress = _analyze_tool_use(tool_name, tool_input, current_stage)
                         
@@ -250,7 +255,21 @@ IMPORTANT - CONVERSATION CONTINUITY:
         ).to_dict()
         
         output_directory = _find_most_recent_output(output_folder, start_time)
-        
+
+        # Fallback: AI ignored cwd and wrote somewhere else — find it from files_written
+        if not output_directory and files_written:
+            output_directory = _find_output_from_written_files(files_written, start_time)
+
+        # Last resort: scan cwd itself for a writing_outputs folder
+        if not output_directory:
+            for candidate in [Path.cwd(), Path.home()]:
+                fallback = candidate / "writing_outputs"
+                if fallback.exists():
+                    found = _find_most_recent_output(fallback, start_time)
+                    if found:
+                        output_directory = found
+                        break
+
         if not output_directory:
             error_result = _create_error_result("Output directory not found after generation")
             if track_token_usage:
@@ -485,6 +504,29 @@ def _analyze_tool_use(tool_name: str, tool_input: Dict[str, Any], current_stage:
             return ("research", f"Web search: {truncated}")
         return ("research", "Searching online resources")
     
+    return None
+
+
+
+def _find_output_from_written_files(files_written: list, start_time: float) -> Optional[Path]:
+    """
+    Fallback: when the AI ignores cwd and writes somewhere else, derive the
+    actual output directory from the file paths it actually wrote to.
+    Looks for the nearest ancestor named like a timestamped paper folder
+    (e.g. 20260411_143000_deep_learning_abstract) inside any writing_outputs dir.
+    """
+    for file_path in files_written:
+        try:
+            p = Path(str(file_path)).resolve()
+            # Walk up the tree looking for a writing_outputs parent
+            for parent in p.parents:
+                if parent.name == "writing_outputs" and parent.exists():
+                    # Return the most recent child dir
+                    result = _find_most_recent_output(parent, start_time)
+                    if result:
+                        return result
+        except Exception:
+            continue
     return None
 
 
