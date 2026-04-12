@@ -285,16 +285,6 @@ IMPORTANT - CONVERSATION CONTINUITY:
         if not output_directory and files_written:
             output_directory = _find_output_from_written_files(files_written, start_time)
 
-        # Last resort: scan cwd itself for a writing_outputs folder
-        if not output_directory:
-            for candidate in [Path.cwd(), Path.home()]:
-                fallback = candidate / "writing_outputs"
-                if fallback.exists():
-                    found = _find_most_recent_output(fallback, start_time)
-                    if found:
-                        output_directory = found
-                        break
-
         if not output_directory:
             error_result = _create_error_result("Output directory not found after generation")
             if track_token_usage:
@@ -560,16 +550,18 @@ def _find_most_recent_output(output_folder: Path, start_time: float) -> Optional
         output_dirs = [d for d in output_folder.iterdir() if d.is_dir()]
         if not output_dirs:
             return None
-        
+
+        # Only consider directories created AFTER this job started
+        # No buffer — a stale folder from a previous job must never be returned
         recent_dirs = [
-            d for d in output_dirs 
-            if d.stat().st_mtime >= start_time - 5
+            d for d in output_dirs
+            if d.stat().st_ctime >= start_time
         ]
-        
+
         if not recent_dirs:
-            recent_dirs = output_dirs
-        
-        most_recent = max(recent_dirs, key=lambda d: d.stat().st_mtime)
+            return None  # Nothing created during this job — don't fall back to old folders
+
+        most_recent = max(recent_dirs, key=lambda d: d.stat().st_ctime)
         return most_recent
     except Exception:
         return None
