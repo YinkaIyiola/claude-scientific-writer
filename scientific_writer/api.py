@@ -1,5 +1,5 @@
 """Async API for programmatic scientific document generation."""
-#NEW
+
 import asyncio
 import os
 import time
@@ -274,6 +274,23 @@ IMPORTANT - CONVERSATION CONTINUITY:
                                     },
                                 ).to_dict()
         
+        # If no files were written, the agent gave a conversational reply
+        # Return it directly without scanning for output dirs
+        if not files_written:
+            yield ProgressUpdate(
+                message="No files created — conversational response",
+                stage="complete",
+            ).to_dict()
+            yield _create_text_only_result(
+                text=accumulated_text,
+                input_tokens=total_input_tokens,
+                output_tokens=total_output_tokens,
+                cache_creation_tokens=total_cache_creation_tokens,
+                cache_read_tokens=total_cache_read_tokens,
+                track_token_usage=track_token_usage,
+            )
+            return
+
         yield ProgressUpdate(
             message="Scanning output directory",
             stage="complete",
