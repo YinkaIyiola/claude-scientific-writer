@@ -637,6 +637,45 @@ def _build_paper_result(paper_dir: Path, file_info: Dict[str, Any]) -> PaperResu
     return result
 
 
+
+def _create_text_only_result(
+    text: str,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    cache_creation_tokens: int = 0,
+    cache_read_tokens: int = 0,
+    track_token_usage: bool = False,
+) -> Dict[str, Any]:
+    """
+    Return a lightweight result for conversational replies where no files
+    were created. Status is "conversational" so the caller can distinguish
+    it from a real paper generation result.
+    """
+    result: Dict[str, Any] = {
+        "type": "result",
+        "status": "conversational",
+        "text": text,
+        "paper_directory": "",
+        "paper_name": "",
+        "metadata": {"title": None, "created_at": datetime.utcnow().isoformat() + "Z", "topic": "", "word_count": None},
+        "files": {"pdf_final": None, "tex_final": None, "pdf_drafts": [], "tex_drafts": [],
+                  "bibliography": None, "figures": [], "data": [], "progress_log": None, "summary": None},
+        "citations": {},
+        "figures_count": 0,
+        "compilation_success": False,
+        "errors": [],
+    }
+    if track_token_usage:
+        result["token_usage"] = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cache_creation_input_tokens": cache_creation_tokens,
+            "cache_read_input_tokens": cache_read_tokens,
+            "total_tokens": input_tokens + output_tokens,
+        }
+    return result
+
+
 def _create_error_result(error_message: str) -> Dict[str, Any]:
     result = PaperResult(
         status="failed",
