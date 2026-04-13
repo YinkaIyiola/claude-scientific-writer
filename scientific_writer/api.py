@@ -280,10 +280,32 @@ IMPORTANT - CONVERSATION CONTINUITY:
                                         "files_created": len(files_written),
                                     },
                                 ).to_dict()
-        
-        # If no files were written, the agent gave a conversational reply
-        # Return it directly without scanning for output dirs
-        if not files_written:
+
+        yield ProgressUpdate(
+            message="Scanning output directory",
+            stage="complete",
+        ).to_dict()
+
+        # Always scan first — agent may have used bash heredoc instead of Write tool
+        # which means files_written can be empty even when files exist on disk
+        output_directory = _find_most_recent_output(output_folder, start_time)
+
+        # Fallback: AI wrote to files_written paths outside output_folder
+        if not output_directory and files_written:
+            output_directory = _find_output_from_written_files(files_written, start_time)
+
+        # Fallback: agent ignored cwd, scan cwd/writing_outputs and home/writing_outputs
+        if not output_directory:
+            for candidate in [Path.cwd(), Path.home()]:
+                fallback = candidate / "writing_outputs"
+                if fallback.exists():
+                    found = _find_most_recent_output(fallback, start_time)
+                    if found:
+                        output_directory = found
+                        break
+
+        # Only conversational if truly nothing was written anywhere on disk
+        if not output_directory:
             yield ProgressUpdate(
                 message="No files created — conversational response",
                 stage="complete",
@@ -298,28 +320,6 @@ IMPORTANT - CONVERSATION CONTINUITY:
             )
             return
 
-        yield ProgressUpdate(
-            message="Scanning output directory",
-            stage="complete",
-        ).to_dict()
-        
-        output_directory = _find_most_recent_output(output_folder, start_time)
-
-        # Fallback: AI ignored cwd and wrote somewhere else — find it from files_written
-        if not output_directory and files_written:
-            output_directory = _find_output_from_written_files(files_written, start_time)
-
-        if not output_directory:
-            error_result = _create_error_result("Output directory not found after generation")
-            if track_token_usage:
-                error_result['token_usage'] = TokenUsage(
-                    input_tokens=total_input_tokens,
-                    output_tokens=total_output_tokens,
-                    cache_creation_input_tokens=total_cache_creation_tokens,
-                    cache_read_input_tokens=total_cache_read_tokens,
-                ).to_dict()
-            yield error_result
-            return
         
         if data_files:
             data_file_paths = get_data_files(work_dir, data_files)
