@@ -252,10 +252,17 @@ IMPORTANT - CONVERSATION CONTINUITY:
                             if file_path:
                                 files_written.append(file_path)
                         elif tool_name.lower() == "bash":
-                            # Also track any mkdir writing_outputs commands
                             cmd = tool_input.get("command", "")
+                            # Track mkdir writing_outputs — agent set up output dir
                             if "writing_outputs" in cmd and "mkdir" in cmd:
                                 files_written.append(cmd)
+                            # Track bash-based file writes: cat > file, tee, echo > file
+                            # These bypass the Write tool but still create files
+                            elif any(op in cmd for op in [" > ", " >> ", "tee ", "cat >"]):
+                                if "writing_outputs" in cmd or any(
+                                    ext in cmd for ext in [".tex", ".md", ".bib", ".txt", ".pdf"]
+                                ):
+                                    files_written.append(cmd)
                         
                         tool_progress = _analyze_tool_use(tool_name, tool_input, current_stage)
                         
@@ -544,21 +551,36 @@ def _find_output_from_written_files(files_written: list, start_time: float) -> O
     """
     Fallback: when the AI ignores cwd and writes somewhere else, derive the
     actual output directory from the file paths it actually wrote to.
-    Looks for the nearest ancestor named like a timestamped paper folder
-    (e.g. 20260411_143000_deep_learning_abstract) inside any writing_outputs dir.
+    Handles both Write tool paths and bash command strings.
     """
-    for file_path in files_written:
-        try:
-            p = Path(str(file_path)).resolve()
-            # Walk up the tree looking for a writing_outputs parent
-            for parent in p.parents:
-                if parent.name == "writing_outputs" and parent.exists():
-                    # Return the most recent child dir
-                    result = _find_most_recent_output(parent, start_time)
-                    if result:
-                        return result
-        except Exception:
-            continue
+    import re
+
+    def extract_paths(entry: str) -> list:
+        """Extract file paths from either a plain path or a bash command string."""
+        # If it looks like a bash command, extract paths from it
+        if any(op in entry for op in [" > ", " >> ", "mkdir", "tee ", "cat "]):
+            # Find anything that looks like an absolute path
+            return re.findall(r'(/[^\s\'"\s]+)', entry)
+        return [entry]
+
+    seen = set()
+    for entry in files_written:
+        for file_path in extract_paths(str(entry)):
+            try:
+                p = Path(file_path)
+                # Walk up looking for a writing_outputs ancestor
+                for parent in p.parents:
+                    if parent.name == "writing_outputs":
+                        key = str(parent)
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        if parent.exists():
+                            result = _find_most_recent_output(parent, start_time)
+                            if result:
+                                return result
+            except Exception:
+                continue
     return None
 
 
