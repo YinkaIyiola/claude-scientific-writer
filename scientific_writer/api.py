@@ -31,7 +31,7 @@ from .utils import (
 
 # Model mapping for effort levels
 EFFORT_LEVEL_MODELS = { 
-    "low": "openai/gpt-4o-mini",
+    "low": "openai/gpt-5.4-nano",
     "medium": "openai/gpt-4o",
     "high": "anthropic/claude-3-opus"
 }
