@@ -31,9 +31,9 @@ from .utils import (
 
 # Model mapping for effort levels
 EFFORT_LEVEL_MODELS = {
-    "low": "gpt-4o-mini",  # Fast and economical
-    "medium": "gpt-4o",
-    "high": "anthropic/claude-opus-4-6",
+    "low": "claude-haiku-4-5",
+    "medium": "claude-sonnet-4-6",
+    "high": "claude-opus-4-6",
 }
 
 
