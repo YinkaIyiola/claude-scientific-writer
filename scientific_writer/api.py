@@ -33,7 +33,7 @@ from .utils import (
 EFFORT_LEVEL_MODELS = {
     "low": "claude-haiku-4-5",
     "medium": "claude-sonnet-4-6",
-    "high": "claude-opus-4-6",
+    "high": "o1",
 }
 
 
