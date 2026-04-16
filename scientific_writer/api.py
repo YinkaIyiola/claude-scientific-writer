@@ -230,7 +230,7 @@ IMPORTANT - CONVERSATION CONTINUITY:
                         text = block.text
                         accumulated_text += text
                         
-                        # yield TextUpdate(content=text).to_dict()
+                        yield TextUpdate(content=text).to_dict()
                         
                         stage, msg = _analyze_progress(accumulated_text, current_stage)
                         
